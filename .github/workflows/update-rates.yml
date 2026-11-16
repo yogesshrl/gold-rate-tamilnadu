@@ -1,0 +1,44 @@
+name: Update gold rates
+
+on:
+  schedule:
+    # 10:30 AM and 4:30 PM India time (cron is in UTC)
+    - cron: '0 5 * * *'
+    - cron: '0 11 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-rates
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run tests for the readers
+        run: node --test "src/lib/*.test.ts" "scripts/*.test.ts"
+
+      - name: Fetch today's rates
+        run: node scripts/update-rates.ts
+
+      - name: Save the rates file
+        run: |
+          if git diff --quiet -- data/rates.json; then
+            echo "No change in rates."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/rates.json
+          git commit -m "Update rates"
+          git push
