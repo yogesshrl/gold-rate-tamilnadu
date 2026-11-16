@@ -3,10 +3,11 @@ import bundled from '../../data/rates.json';
 import type { DayRate, RatesFile } from '../types';
 
 /**
- * Where the app downloads the latest rates from. Leave empty until the rates file is hosted;
- * the app then shows the copy bundled at build time.
+ * Where the app downloads the latest rates from. The scheduled job in
+ * .github/workflows/update-rates.yml keeps this file current. If the download fails,
+ * the app shows its last saved copy, then the copy bundled at build time.
  */
-export const RATES_URL = '';
+export const RATES_URL = 'https://raw.githubusercontent.com/yogesshrl/gold-rate-tamilnadu/main/data/rates.json';
 
 const CACHE_KEY = 'rates-file-v1';
 const FETCH_TIMEOUT_MS = 8000;
