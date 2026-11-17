@@ -28,6 +28,17 @@ type Provider = { name: string; fetchToday: () => Promise<Rates & { sourceLabel?
 const GOLD_TOLERANCE_PERCENT = 0.25;
 const SILVER_TOLERANCE_PERCENT = 5;
 const SILVER_FALLBACK_SOURCE = 'Live Chennai';
+/**
+ * Pages that print no date still show yesterday's rate early in the morning,
+ * so they only count from this hour, India time. Dated pages count at any time.
+ */
+const UNDATED_FROM_HOUR = 10;
+
+export function hourInIndia(date: Date): number {
+  return Number(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', hour: '2-digit', hour12: false }).format(date),
+  );
+}
 
 /**
  * Reads every source, drops any whose page says its rate is for another day,
@@ -37,7 +48,9 @@ export async function readJewellers(
   today: string,
   load: (url: string) => Promise<string | null> = fetchPage,
   log: (line: string) => void = console.log,
+  now: Date = new Date(),
 ): Promise<Rates & { sourceLabel: string }> {
+  const undatedAllowed = hourInIndia(now) >= UNDATED_FROM_HOUR;
   const readings: { name: string; reading: SourceReading }[] = [];
   for (const source of SOURCES) {
     const html = await load(source.url);
@@ -48,6 +61,10 @@ export async function readJewellers(
     const reading = source.parse(html);
     if (reading.statedDate && reading.statedDate !== today) {
       log(`${source.name}: rate is dated ${reading.statedDate}, not today. Skipped.`);
+      continue;
+    }
+    if (!reading.statedDate && !undatedAllowed) {
+      log(`${source.name}: page has no date, and before ${UNDATED_FROM_HOUR} AM it may still show yesterday's rate. Skipped.`);
       continue;
     }
     log(`${source.name}: 22K ${reading.gold22 ?? '-'}, 24K ${reading.gold24 ?? '-'}, silver ${reading.silver ?? '-'}`);
@@ -141,7 +158,18 @@ async function main() {
   const history = file.sample ? [] : file.history;
 
   const date = todayInIndia();
-  const { sourceLabel, ...today } = await provider.fetchToday();
+  let fetched: Awaited<ReturnType<Provider['fetchToday']>>;
+  try {
+    fetched = await provider.fetchToday();
+  } catch (error) {
+    // Shops publishing late is normal, so most runs just try again later. Only the
+    // day's last run (REQUIRE_TODAY=1) fails, and only if today's rate was never saved.
+    const savedToday = history.some((d) => d.date === date);
+    if (process.env.REQUIRE_TODAY === '1' && !savedToday) throw error;
+    console.log(`${(error as Error).message} Will try again on the next run.`);
+    return;
+  }
+  const { sourceLabel, ...today } = fetched;
   // Compare with the most recent saved rate, including an earlier update from today.
   const previous = history.at(-1);
   const problem = validate(today, previous);

@@ -2,9 +2,13 @@ name: Update gold rates
 
 on:
   schedule:
-    # 10:30 AM and 4:30 PM India time (cron is in UTC)
-    - cron: '0 5 * * *'
-    - cron: '0 11 * * *'
+    # India time (cron is UTC). The Madras jewellers' association publishes at 9:30 AM
+    # and 3:30 PM, and shops copy it within minutes. GitHub often starts runs 5-30
+    # minutes late, so each publication gets a first read and a later catch-up.
+    - cron: '35 4 * * *' # 10:05 AM
+    - cron: '0 6 * * *' # 11:30 AM catch-up
+    - cron: '30 10 * * *' # 4:00 PM
+    - cron: '30 11 * * *' # 5:00 PM catch-up
   workflow_dispatch:
 
 permissions:
@@ -29,6 +33,9 @@ jobs:
         run: node --test "src/lib/*.test.ts" "scripts/*.test.ts"
 
       - name: Fetch today's rates
+        env:
+          # The 5 PM catch-up fails loudly if no rate was saved all day.
+          REQUIRE_TODAY: ${{ github.event.schedule == '30 11 * * *' && '1' || '' }}
         run: node scripts/update-rates.ts
 
       - name: Save the rates file

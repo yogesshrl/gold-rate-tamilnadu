@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseGrt, parseKhazana, parseLiveChennai, parseThangamayil, SOURCES } from './sources.ts';
-import { readJewellers, validate } from './update-rates.ts';
+import { hourInIndia, readJewellers, validate } from './update-rates.ts';
 
 // Snippets copied from the live pages on 16 Nov 2026.
 const GRT =
@@ -72,9 +72,12 @@ const loader = (overrides: Record<string, string | null> = {}) => async (url: st
   return name in overrides ? overrides[name] : pages[name];
 };
 const quiet = () => {};
+// 11:00 AM and 7:30 AM India time on 16 Nov 2026.
+const LATE_MORNING = new Date('2026-11-16T05:30:00Z');
+const EARLY_MORNING = new Date('2026-11-16T02:00:00Z');
 
 test('readJewellers uses the agreed rate and skips the stale source', async () => {
-  const result = await readJewellers('2026-11-16', loader(), quiet);
+  const result = await readJewellers('2026-11-16', loader(), quiet, LATE_MORNING);
   assert.equal(result.gold22, 12540);
   assert.equal(result.gold24, 13681);
   // Khazana and Live Chennai disagree on silver, so the local page is used.
@@ -83,13 +86,13 @@ test('readJewellers uses the agreed rate and skips the stale source', async () =
 });
 
 test('readJewellers still works when one site is down', async () => {
-  const result = await readJewellers('2026-11-16', loader({ 'GRT Jewellers': null }), quiet);
+  const result = await readJewellers('2026-11-16', loader({ 'GRT Jewellers': null }), quiet, LATE_MORNING);
   assert.equal(result.gold22, 12540);
 });
 
 test('readJewellers refuses to save when fewer than two sources agree', async () => {
   const load = loader({ 'GRT Jewellers': null, 'Khazana Jewellery': null });
-  await assert.rejects(readJewellers('2026-11-16', load, quiet), /Fewer than two sources agree/);
+  await assert.rejects(readJewellers('2026-11-16', load, quiet, LATE_MORNING), /Fewer than two sources agree/);
 });
 
 test('validate rejects impossible rates and large jumps', () => {
@@ -97,4 +100,14 @@ test('validate rejects impossible rates and large jumps', () => {
   assert.equal(validate({ gold22: 12540, gold24: 13681, silver: 190 }, previous), null);
   assert.match(validate({ gold22: 12540, gold24: 12000, silver: 190 }, previous)!, /24K must cost more/);
   assert.match(validate({ gold22: 20000, gold24: 21000, silver: 190 }, previous)!, /looks wrong/);
+});
+
+test('before 10 AM India time, pages without a date are not trusted', async () => {
+  // Only Live Chennai states today's date, so no two sources can agree yet.
+  await assert.rejects(readJewellers('2026-11-16', loader(), quiet, EARLY_MORNING), /Fewer than two sources agree/);
+});
+
+test('hourInIndia converts UTC to India time', () => {
+  assert.equal(hourInIndia(new Date('2026-11-16T04:30:00Z')), 10);
+  assert.equal(hourInIndia(new Date('2026-11-16T20:00:00Z')), 1);
 });
