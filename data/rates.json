@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-20T14:58:21.796Z",
+  "updatedAt": "2026-11-21T12:57:01.769Z",
   "source": "GRT Jewellers, Khazana Jewellery, Live Chennai",
   "sample": false,
   "history": [
@@ -31,6 +31,12 @@
       "date": "2026-11-20",
       "gold22": 11510,
       "gold24": 12557,
+      "silver": 175
+    },
+    {
+      "date": "2026-11-21",
+      "gold22": 11465,
+      "gold24": 12508,
       "silver": 175
     }
   ]
